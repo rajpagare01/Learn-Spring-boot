@@ -6,12 +6,16 @@ import com.voting.dao.VoteDAO;
 import com.voting.model.Candidate;
 import com.voting.model.Election;
 import com.voting.model.User;
+import com.google.gson.Gson;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * ResultServlet — displays election results.
@@ -80,11 +84,23 @@ public class ResultServlet extends HttpServlet {
         req.setAttribute("candidates", candidates);
         req.setAttribute("totalVotes", totalVotes);
         req.setAttribute("hasVoted",   hasVoted);
+        req.setAttribute("chartJson",  buildChartJson(candidates));
 
         String view = isAdmin
             ? "/WEB-INF/views/admin/results.jsp"
             : "/WEB-INF/views/voter/results.jsp";
 
         req.getRequestDispatcher(view).forward(req, resp);
+    }
+
+    private static String buildChartJson(List<Candidate> candidates) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Candidate c : candidates) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("name", c.getName());
+            m.put("votes", c.getVoteCount());
+            rows.add(m);
+        }
+        return new Gson().toJson(rows);
     }
 }

@@ -1,78 +1,63 @@
 package com.voting.util;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * HikariCP-backed JDBC pool. Credentials from /db.properties.
- * Call {@link #initPool()} from {@link AppStartupListener} before any DAO use.
+ * DBConnection — thread-safe JDBC connection factory.
+ * Reads credentials from /src/main/resources/db.properties.
+ * Usage:  try (Connection con = DBConnection.getConnection()) { ... }
  */
-public final class DBConnection {
+public class DBConnection {
 
     private static final Logger LOGGER = Logger.getLogger(DBConnection.class.getName());
     private static final String PROPS_FILE = "/db.properties";
 
-    private static volatile HikariDataSource dataSource;
+    private static final String URL;
+    private static final String USER;
+    private static final String PASSWORD;
 
-    private DBConnection() {}
-
-    public static synchronized void initPool() {
-        if (dataSource != null && !dataSource.isClosed()) {
-            return;
-        }
+    static {
         Properties props = new Properties();
         try (InputStream is = DBConnection.class.getResourceAsStream(PROPS_FILE)) {
             if (is == null) {
-                throw new IllegalStateException("Cannot find " + PROPS_FILE + " on classpath.");
+                throw new ExceptionInInitializerError(
+                    "Cannot find " + PROPS_FILE + " on the classpath.");
             }
             props.load(is);
         } catch (IOException e) {
-            throw new IllegalStateException(e);
+            throw new ExceptionInInitializerError(e);
         }
 
-        String url = props.getProperty("db.url");
-        String user = props.getProperty("db.username");
-        String pass = props.getProperty("db.password", "");
-        String driver = props.getProperty("db.driver", "com.mysql.cj.jdbc.Driver");
+        URL      = props.getProperty("db.url");
+        USER     = props.getProperty("db.username");
+        PASSWORD = props.getProperty("db.password");
 
-        HikariConfig cfg = new HikariConfig();
-        cfg.setJdbcUrl(url);
-        cfg.setUsername(user);
-        cfg.setPassword(pass);
-        cfg.setDriverClassName(driver);
-        cfg.setMaximumPoolSize(10);
-        cfg.setMinimumIdle(2);
-        cfg.setPoolName("VoteSecurePool");
-        cfg.setConnectionTestQuery("SELECT 1");
-
-        dataSource = new HikariDataSource(cfg);
-        LOGGER.info("HikariCP pool started.");
-    }
-
-    public static synchronized void closePool() {
-        if (dataSource != null && !dataSource.isClosed()) {
-            dataSource.close();
-            LOGGER.info("HikariCP pool closed.");
-        }
-        dataSource = null;
-    }
-
-    public static Connection getConnection() throws SQLException {
-        if (dataSource == null || dataSource.isClosed()) {
-            initPool();
-        }
         try {
-            return dataSource.getConnection();
+            Class.forName(props.getProperty("db.driver", "com.mysql.cj.jdbc.Driver"));
+        } catch (ClassNotFoundException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private DBConnection() {}
+
+    /**
+     * Returns a new JDBC Connection. Callers MUST close it (try-with-resources).
+     */
+    public static Connection getConnection() throws SQLException {
+        try {
+            Connection con = DriverManager.getConnection(URL, USER, PASSWORD);
+            LOGGER.fine("DB connection opened.");
+            return con;
         } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Failed to get connection from pool", e);
+            LOGGER.log(Level.SEVERE, "Failed to open DB connection", e);
             throw e;
         }
     }
