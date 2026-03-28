@@ -1,5 +1,6 @@
 package com.Employer.Model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,6 +20,6 @@ public class Employee {
     @NonNull
     private String lastName;
     @NonNull
-    @jakarta.persistence.Column(unique = true)
+    @Column(unique = true)
     private String email;
 }
